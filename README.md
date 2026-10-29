@@ -58,10 +58,10 @@ sudo appcenter-cli start iconManager
 需要 Go 1.21+ 和 [fnpack](https://developer.fnnas.com/docs/cli/fnpack/)：
 
 ```bash
-# 1. 编译 CGI 二进制
+# 1. 编译 CGI 二进制（-buildvcs=false 保证同一份源码产出相同二进制）
 cd src
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -trimpath -ldflags="-s -w" -o ../app/ui/index.cgi .
+  go build -trimpath -buildvcs=false -ldflags="-s -w" -o ../app/ui/index.cgi .
 
 # 2. 打包
 cd ..
