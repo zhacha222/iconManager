@@ -119,12 +119,15 @@ trim_http_cgi  →  ui/index.cgi (Go)
 
 ### 开关的备份格式
 
-关闭时在 `${TRIM_PKGVAR}/backups/<service_name>/` 下存：
+关闭时在 `<数据目录>/backups/<service_name>/` 下存：
 
 ```
 record.json          # 整行 JSON + 禁用时间
 <icon>.png           # 图标文件原件
 ```
+
+数据目录默认由安装位置推导（`<卷>/@appcenter/iconManager` → `<卷>/@appdata/iconManager`），
+可用 `ICONMGR_DATA_DIR` 覆盖。
 
 开启时用 PostgreSQL 的 `json_populate_record` 精确还原**全部字段**（含原 `id`）。
 
@@ -167,10 +170,18 @@ sudo chmod +x /vol2/@appcenter/iconManager/ui/index.cgi
 sudo appcenter-cli start iconManager
 ```
 
-### 4. 图标目录路径
+### 4. 目录推导
 
-默认从 `TRIM_APPDEST` 环境变量推导（`$TRIM_APPDEST/ui/images`）。
-如需指定，设置环境变量 `ICONMGR_IMAGES_DIR`。
+CGI 由 `trim_http_cgi` 拉起，实测**不注入** `TRIM_APPDEST` / `TRIM_PKGVAR`，
+只提供标准 CGI 变量。因此路径从**自身可执行文件位置**推导：
+
+| 目录 | 推导规则 | 覆盖变量 |
+|---|---|---|
+| 安装目录 | `<APPDIR>/ui/index.cgi` → `<APPDIR>` | `ICONMGR_APPDIR` |
+| 图标目录 | `<APPDIR>/ui/images` | `ICONMGR_IMAGES_DIR` |
+| 数据目录（备份/日志） | `<卷>/@appcenter/<app>` → `<卷>/@appdata/<app>` | `ICONMGR_DATA_DIR` |
+
+这样不依赖卷号（`vol1`/`vol2`/`vol3` 均可），也不需要修改系统配置。
 
 ## 与官方 customIcon 的关系
 

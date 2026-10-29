@@ -72,11 +72,8 @@ type BackupRecord struct {
 }
 
 func main() {
-	// 日志：CGI 下每次请求都会重写一行，用 append 模式
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "/tmp/iconManager"
-	}
+	// 日志：CGI 下每次请求都会追加一行
+	pkgVar := dataDir()
 	os.MkdirAll(pkgVar, 0o755)
 	if lf, err := os.OpenFile(filepath.Join(pkgVar, "cgi.log"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
@@ -219,23 +216,63 @@ func esc(s string) string {
 	return r.Replace(s)
 }
 
-func backupRoot() string {
-	if v := os.Getenv("TRIM_PKGVAR"); v != "" {
-		return filepath.Join(v, "backups")
+// appDir 返回应用安装目录（如 /vol2/@appcenter/iconManager）。
+//
+// CGI 由 trim_http_cgi 拉起，实测**不注入** TRIM_APPDEST / TRIM_PKGVAR，
+// 只提供标准 CGI 变量（SCRIPT_FILENAME / REQUEST_METHOD 等），因此路径只能
+// 从自身可执行文件位置推导：<APPDIR>/ui/index.cgi -> <APPDIR>。
+func appDir() string {
+	if v := os.Getenv("ICONMGR_APPDIR"); v != "" {
+		return v
 	}
-	return "/tmp/iconManager/backups"
+	if exe, err := os.Executable(); err == nil {
+		if real, e := filepath.EvalSymlinks(exe); e == nil {
+			exe = real
+		}
+		d := filepath.Dir(exe)
+		if filepath.Base(d) == "ui" {
+			return filepath.Dir(d)
+		}
+		return d
+	}
+	// 常驻服务模式下平台才会注入
+	if v := os.Getenv("TRIM_APPDEST"); v != "" {
+		return v
+	}
+	return ""
 }
+
+// dataDir 返回可持久化的数据目录（如 /vol2/@appdata/iconManager）。
+func dataDir() string {
+	if v := os.Getenv("ICONMGR_DATA_DIR"); v != "" {
+		return v
+	}
+	if v := os.Getenv("TRIM_PKGVAR"); v != "" {
+		return v
+	}
+	if d := appDir(); d != "" {
+		// <vol>/@appcenter/<app> -> <vol>/@appdata/<app>
+		parent := filepath.Dir(d)
+		if filepath.Base(parent) == "@appcenter" {
+			return filepath.Join(filepath.Dir(parent), "@appdata", filepath.Base(d))
+		}
+		return filepath.Join(d, "data")
+	}
+	return "/tmp/iconManager"
+}
+
+func backupRoot() string { return filepath.Join(dataDir(), "backups") }
 
 func backupDir(name string) string { return filepath.Join(backupRoot(), esc(name)) }
 
-// imagesDir 返回图标存放目录。优先级：环境变量 > TRIM_APPDEST 推导 > 默认值。
-// 不能硬编码 /vol2：不同设备卷号可能是 vol1、vol3 等。
+// imagesDir 返回图标存放目录。优先级：环境变量 > 安装目录推导 > 兜底。
+// 不要硬编码 /vol2：不同设备卷号可能是 vol1、vol3 等。
 func imagesDir() string {
 	if v := os.Getenv("ICONMGR_IMAGES_DIR"); v != "" {
 		return v
 	}
-	if dest := os.Getenv("TRIM_APPDEST"); dest != "" {
-		return filepath.Join(dest, "ui", "images")
+	if d := appDir(); d != "" {
+		return filepath.Join(d, "ui", "images")
 	}
 	return "/var/apps/iconManager/target/ui/images"
 }
