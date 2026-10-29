@@ -19,16 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-第三方声明 / Third-party notice
-
-本项目是飞牛 fnOS 第三方应用「扩展图标管理」(customIcon) 的功能增强实现，
-UI 布局与交互参考其设计。原扩展由 MR_XIAOBO / 晓勃网络 (XIAOBONET) 开发，
-原始版权声明如下：
-
-  Copyright © 2021-Present 晓勃网络(XIAOBONET). All Rights Reserved.
-
-本项目不包含、不修改原扩展的任何二进制或源代码，仅通过飞牛公开的应用规范
-与数据库接口实现相同功能。本项目与飞牛官方及原扩展作者无隶属关系。
