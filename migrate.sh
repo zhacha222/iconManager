@@ -1,5 +1,5 @@
 #!/bin/bash
-# 把官方「扩展图标管理」(customIcon) 的图标迁移到 iconManager 接管。
+# 把图标数据从源应用迁移到 iconManager 名下。
 #
 # 原理：
 #   - app_service 表无外键约束，app_id 只是普通字段

@@ -1,6 +1,6 @@
 appname                    = iconManager
 version                    = 1.0.0
-display_name               = 图标管理·开关
+display_name               = 拓展图标管理
 desc                       = 管理飞牛扩展图标的开关。关闭即备份并移除桌面图标，开启即从备份恢复。
 platform                   = x86
 source                     = thirdparty

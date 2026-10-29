@@ -1,18 +1,18 @@
-# iconManager —— 飞牛 fnOS 扩展图标管理（带开关）
+# iconManager —— 飞牛 fnOS 拓展图标管理（带开关）
 
-> 给飞牛 fnOS 的「扩展图标管理」加上**单个图标启用/禁用开关**。
-> UI 复刻官方 `customIcon` 扩展，CGI 模式运行，不占端口、无常驻进程。
+> 飞牛 fnOS 桌面扩展图标的管理工具，支持**单个图标启用/禁用开关**。
+> CGI 模式运行，不占端口、无常驻进程。
 
 [![fnOS](https://img.shields.io/badge/fnOS-0.9.27%2B-blue)](https://developer.fnnas.com/docs/guide)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.21%2B-00ADD8)](https://go.dev)
 
-## 为什么做这个
+## 特点
 
-飞牛官方的「扩展图标管理」（`customIcon`）可以增删自定义桌面图标，但**不能单独禁用某个图标**。
+飞牛默认只能增删桌面图标，**不能单独禁用某个图标**。
 想临时隐藏一个图标，只能删除它；删除后它的配置和图标都没了，想恢复得重新填一遍。
 
-本项目在完整保留官方功能的基础上，增加了一个开关：
+本项目的做法是给每个图标一个开关：
 
 - **关闭** = 自动备份该图标（整行数据 + 图标文件）后从数据库移除 → 桌面图标消失
 - **开启** = 从备份精确还原（**保留原 id、原配置**）→ 桌面图标回来
@@ -94,7 +94,7 @@ https://<你的NAS域名>/cgi/ThirdParty/iconManager/index.cgi/
 
 ### 运行模型：CGI
 
-与官方 `customIcon` 一致，采用 CGI 按需启动：
+采用 CGI 按需启动：
 
 | | iconManager |
 |---|---|
@@ -136,7 +136,7 @@ record.json          # 整行 JSON + 禁用时间
 ### 1. 需要 `run-as: root`
 
 飞牛的 `pg_hba.conf` 配置为 `local all all md5`，只有 `root` 能通过 `map=trim_root`
-peer 认证直连数据库。这与官方 `customIcon` 的做法一致。
+peer 认证直连数据库，因此本应用以 root 身份运行。
 
 本应用只做四件事：读表、删行、插行、读写图标文件。
 所有 SQL 使用参数化查询，图标文件名拒绝路径穿越。
@@ -183,11 +183,9 @@ CGI 由 `trim_http_cgi` 拉起，实测**不注入** `TRIM_APPDEST` / `TRIM_PKGV
 
 这样不依赖卷号（`vol1`/`vol2`/`vol3` 均可），也不需要修改系统配置。
 
-## 与官方 customIcon 的关系
+## 数据迁移
 
-本项目修改的是**同一张表**（`app_service`）的**同一批数据**。
-
-如果你想把官方扩展的图标迁移到本项目接管，见 `migrate.sh`：
+本应用读写 `app_service` 表中的图标记录。如需把已有图标转到本应用名下，见 `migrate.sh`：
 
 ```bash
 bash migrate.sh check      # 检查环境与数据量
@@ -196,8 +194,6 @@ bash migrate.sh run        # 执行迁移（改 app_id + 拷图标文件）
 bash migrate.sh verify     # 验证
 bash migrate.sh rollback   # 回滚
 ```
-
-迁移后官方 `customIcon` 可以停用（建议先停用而非卸载，确认无问题后再卸）。
 
 ## 项目结构
 
@@ -220,13 +216,13 @@ iconManager/
 ├── manifest              # 应用元信息
 ├── ICON.PNG              # 64×64 包图标
 ├── ICON_256.PNG          # 256×256 包图标
-├── migrate.sh            # 从官方扩展迁移的脚本
+├── migrate.sh            # 图标数据迁移脚本
 └── README.md
 ```
 
-## UI 复刻说明
+## 界面风格
 
-样式取自官方 `customIcon` 的 scoped CSS，配色用 Element Plus 官方色板：
+配色采用 Element Plus 官方色板，布局参数如下：
 
 ```css
 .icon-list-container { padding:10px 10px 0 }
@@ -239,15 +235,14 @@ iconManager/
                        box-shadow:0 2px 12px #0000001a }
 ```
 
-相对官方版本，**新增的只有「启用状态」一列**和顶部「重载服务」按钮。
+列表页包含「启用状态」列与顶部「重载服务」按钮，分页支持首页 / 上一页 / 下一页 / 尾页。
 
-## 致谢
+## 参考
 
-- 原「扩展图标管理」由 **MR_XIAOBO / 晓勃网络 (XIAOBONET)** 开发
 - 应用规范参考 [飞牛开发者文档](https://developer.fnnas.com/docs/guide)
 
 ## 许可
 
-[MIT](LICENSE)。第三方组件与参考项目的声明见 [NOTICE.md](NOTICE.md)。
+[MIT](LICENSE)。相关声明见 [NOTICE.md](NOTICE.md)。
 
 本项目与飞牛（fnOS）官方无隶属关系，为社区独立开发。

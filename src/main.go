@@ -1,7 +1,7 @@
-// iconManager —— 飞牛扩展图标管理（CGI 模式，对齐官方 customIcon）
+// iconManager —— 飞牛拓展图标管理（CGI 模式）
 //
 // 运行方式：单文件可执行，飞牛 trim_http_cgi 每次请求时启动一次，处理完退出。
-// 不监听端口、无常驻进程，空闲零占用 —— 与官方 customIcon 一致。
+// 不监听端口、无常驻进程，空闲零占用。
 //
 // 路由：/cgi/ThirdParty/iconManager/index.cgi/<path>
 //   /                      → HTML 页面

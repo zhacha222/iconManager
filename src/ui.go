@@ -1,7 +1,6 @@
 // 前端页面（内嵌进二进制）
 //
-// UI 复刻官方「扩展图标管理」（customIcon 2.3.9-Beta），并增加单个图标开关。
-// 官方样式取自 /vol2/@appcenter/customIcon/dist/index.html 的 scoped CSS：
+// 单文件实现，使用 Element Plus 色板。布局参数：
 //   .icon-list-container{padding:10px 10px 0}
 //   .search-container{background:#f5f7fa;padding:20px 20px 0;border-radius:4px;display:flex;justify-content:space-between}
 //   .pagination-container{margin-top:20px;text-align:right}
@@ -16,7 +15,7 @@ const indexHTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base href="/cgi/ThirdParty/iconManager/index.cgi/">
 
-<title>扩展图标管理</title>
+<title>拓展图标管理</title>
 <style>
 :root{
   --primary:#409eff; --primary-l3:#79bbff; --primary-l9:#ecf5ff;
@@ -234,7 +233,7 @@ html.dark #toast.err{background:#2b1d1d;border-color:#472626}
 <!-- ================= 列表页 ================= -->
 <div class="icon-list-container" id="pageList">
   <div class="header">
-    <h1>扩展图标管理</h1>
+    <h1>拓展图标管理</h1>
     <div style="display:flex;gap:10px">
       <button class="el-btn" id="btnTheme" title="切换主题">◐ 主题</button>
       <button class="el-btn" id="btnReload" title="改库后桌面图标需重载服务才刷新">↻ 重载服务</button>
@@ -285,16 +284,17 @@ html.dark #toast.err{background:#2b1d1d;border-color:#472626}
   <div class="pagination-container">
     <span id="pageInfo"></span>
     <div class="btn-group">
+      <button class="el-btn" id="btnFirst">首页</button>
       <button class="el-btn" id="btnPrev">上一页</button>
       <button class="el-btn" id="btnNext">下一页</button>
+      <button class="el-btn" id="btnLast">尾页</button>
     </div>
   </div>
 
   <div class="copyright-container">
     <div class="copyright-content">
       <div>
-        <p>基于 MR_XIAOBO 的「扩展图标管理」重构，增加单图标开关</p>
-        <p>原项目 Copyright © 2021-Present 晓勃网络(XIAOBONET). All Rights Reserved.</p>
+        <p>拓展图标管理 · 支持单个图标启用/禁用</p>
       </div>
     </div>
   </div>
@@ -314,7 +314,7 @@ html.dark #toast.err{background:#2b1d1d;border-color:#472626}
         <div class="el-input">
           <input class="el-input__inner" id="fName" placeholder="服务名称仅支持字母、数字、下划线组合">
         </div>
-        <div class="hint">会自动加 <code>customIcon.</code> 前缀；编辑时不可修改</div>
+        <div class="hint">保存时会自动补全命名前缀；编辑时不可修改</div>
       </div>
     </div>
 
@@ -557,8 +557,10 @@ function render(){
 
   $('#pageInfo').textContent = '共 ' + all.length + ' 条 · 启用 ' + STAT.enabled
     + ' · 关闭 ' + STAT.disabled + ' · 第 ' + PAGE + '/' + totalPages + ' 页';
+  $('#btnFirst').classList.toggle('is-disabled', PAGE <= 1);
   $('#btnPrev').classList.toggle('is-disabled', PAGE <= 1);
   $('#btnNext').classList.toggle('is-disabled', PAGE >= totalPages);
+  $('#btnLast').classList.toggle('is-disabled', PAGE >= totalPages);
 
   $$('[data-toggle]').forEach(cb => cb.addEventListener('change', onToggle));
   $$('[data-edit]').forEach(b => b.addEventListener('click', () => openEdit(b.dataset.edit)));
@@ -748,10 +750,16 @@ $('#btnReset').addEventListener('click', () => {
 $('#qName').addEventListener('keydown', e => { if(e.key === 'Enter') $('#btnSearch').click(); });
 $('#qTitle').addEventListener('keydown', e => { if(e.key === 'Enter') $('#btnSearch').click(); });
 
+/* 分页：首页 / 上一页 / 下一页 / 尾页 */
+function totalPagesNow(){ return Math.max(1, Math.ceil(filtered().length / PAGE_SIZE)); }
+$('#btnFirst').addEventListener('click', () => { if(PAGE > 1){ PAGE = 1; render(); } });
 $('#btnPrev').addEventListener('click', () => { if(PAGE > 1){ PAGE--; render(); } });
 $('#btnNext').addEventListener('click', () => {
-  const tp = Math.max(1, Math.ceil(filtered().length / PAGE_SIZE));
-  if(PAGE < tp){ PAGE++; render(); }
+  if(PAGE < totalPagesNow()){ PAGE++; render(); }
+});
+$('#btnLast').addEventListener('click', () => {
+  const tp = totalPagesNow();
+  if(PAGE < tp){ PAGE = tp; render(); }
 });
 
 /* ---------- 重载服务 ---------- */
