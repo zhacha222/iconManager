@@ -1,0 +1,24 @@
+# 默认统一处理文本文件
+* text=auto
+
+# Shell 脚本与 CGI 必须保持 LF（在飞牛/Linux 上执行）
+*.sh    text eol=lf
+cmd/*   text eol=lf
+migrate.sh text eol=lf
+
+# Go 源码
+*.go    text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+
+# 应用配置文件
+manifest text eol=lf
+config/* text eol=lf
+app/ui/config text eol=lf
+
+# 图片按二进制处理
+*.png   binary
+*.PNG   binary
+*.jpg   binary
+*.ico   binary
+*.fpk   binary

@@ -1,0 +1,26 @@
+# 构建产物
+*.fpk
+app/ui/index.cgi
+src/iconManager
+
+# Go
+/src/iconManager
+*.test
+*.out
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 本地配置与备份（可能含敏感信息）
+.env
+*.local
+backups/
+migrate-*.json
+*.bak
