@@ -237,6 +237,6 @@ iconManager/
 
 ## 许可
 
-[MIT](LICENSE)
+[MIT](LICENSE)。第三方组件与参考项目的声明见 [NOTICE.md](NOTICE.md)。
 
 本项目与飞牛（fnOS）官方无隶属关系，为社区独立开发。
