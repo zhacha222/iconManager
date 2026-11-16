@@ -20,9 +20,13 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"image/gif"
+	_ "image/jpeg"
 	"image/png"
 	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +35,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp"
 
 	_ "github.com/lib/pq"
 )
@@ -363,10 +371,115 @@ func resizeTo(src image.Image, w, h int) *image.RGBA {
 	return dst
 }
 
-func saveIconSizes(baseName string, data []byte) (string, error) {
-	src, _, err := image.Decode(bytes.NewReader(data))
+// maxIconBytes 限制原始图片大小（下载/上传统一）
+const maxIconBytes = 8 << 20
+
+// supportedFormats 供前端与错误提示使用
+const supportedFormats = "PNG / JPEG / GIF / WebP / BMP / TIFF"
+
+// decodeAny 解析任意已注册格式，返回图像与识别到的格式名。
+// 若首帧解码失败且是 GIF，会尝试取第一帧（GIF 的 image.Decode 本就返回首帧）。
+func decodeAny(data []byte) (image.Image, string, error) {
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err == nil {
+		return img, format, nil
+	}
+	// image.Decode 失败时，再试一次 GIF（部分动图 image.Decode 不支持，需 gif.DecodeAll）
+	if g, e2 := gif.DecodeAll(bytes.NewReader(data)); e2 == nil && len(g.Image) > 0 {
+		return g.Image[0], "gif", nil
+	}
+	return nil, "", err
+}
+
+// fetchImageFromURL 从 http(s) URL 拉取图片，带超时与大小上限。
+func fetchImageFromURL(raw string) ([]byte, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("URL 为空")
+	}
+	u, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("无法解析图片: %w", err)
+		return nil, fmt.Errorf("URL 格式错误: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("只支持 http/https，收到 %q", u.Scheme)
+	}
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("重定向次数过多")
+			}
+			return nil
+		},
+	}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	// 部分站点会拒绝没有 UA/Referer 的请求
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; iconManager/1.0)")
+	req.Header.Set("Accept", "image/avif,image/webp,image/png,image/*,*/*;q=0.8")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("下载失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("下载失败: HTTP %d", resp.StatusCode)
+	}
+	// 只读上限 +1 字节，用于判断是否超限
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxIconBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("读取失败: %w", err)
+	}
+	if len(data) > maxIconBytes {
+		return nil, fmt.Errorf("图片超过 %d MB 上限", maxIconBytes>>20)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("下载内容为空")
+	}
+	return data, nil
+}
+
+// stripDataURI 剥掉 data:image/...;base64, 前缀（格式不限定，修复原先只认 png 的缺陷）
+func stripDataURI(s string) string {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "data:") {
+		return s
+	}
+	if i := strings.Index(s, ","); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
+// safeIconName 校验图标文件名，只允许「字母数字下划线横线点」，拒绝路径穿越。
+func safeIconName(n string) bool {
+	n = strings.TrimSpace(n)
+	if n == "" || len(n) > 128 {
+		return false
+	}
+	if n != filepath.Base(n) || strings.Contains(n, "..") {
+		return false
+	}
+	for _, r := range n {
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.'
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func saveIconSizes(baseName string, data []byte) (string, error) {
+	src, format, err := decodeAny(data)
+	if err != nil {
+		return "", fmt.Errorf("无法解析图片（支持 %s）: %w", supportedFormats, err)
+	}
+	if logf != nil {
+		logf.Printf("图标解码成功: format=%s size=%d", format, len(data))
 	}
 	os.MkdirAll(imagesDir(), 0o755)
 	for _, sz := range []int{256, 64} {
@@ -516,6 +629,7 @@ type payload struct {
 	URL         string `json:"url"`
 	IsAdmin     bool   `json:"is_admin"`
 	IconBase64  string `json:"icon_base64"`
+	IconName    string `json:"icon_name"` // 已由 /api/upload 落盘的图标文件名，直接复用
 }
 
 func (p *payload) normalize() error {
@@ -564,13 +678,29 @@ func apiCreate(body []byte, isAdmin bool) {
 	}
 
 	iconPath := "ui/images/icon_{0}.png"
-	if p.IconBase64 != "" {
-		raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(p.IconBase64, "data:image/png;base64,"))
-		if err == nil {
-			if name, e := saveIconSizes(esc(p.ServiceName), raw); e == nil {
-				iconPath = "ui/images/" + name
-			}
+	if strings.TrimSpace(p.IconBase64) != "" {
+		raw, err := base64.StdEncoding.DecodeString(stripDataURI(p.IconBase64))
+		if err != nil {
+			outErr(400, "图标 base64 解析失败")
+			return
 		}
+		name, e := saveIconSizes(esc(p.ServiceName), raw)
+		if e != nil {
+			outErr(400, "图标保存失败: "+e.Error())
+			return
+		}
+		iconPath = "ui/images/" + name
+	} else if n := strings.TrimSpace(p.IconName); n != "" {
+		// 已由 /api/upload 落盘（含从 URL 获取的），校验存在后直接引用
+		if !safeIconName(n) {
+			outErr(400, "图标文件名不合法")
+			return
+		}
+		if _, e := os.Stat(filepath.Join(imagesDir(), filepath.Base(n))); e != nil {
+			outErr(400, "图标文件不存在，请重新上传")
+			return
+		}
+		iconPath = "ui/images/" + filepath.Base(n)
 	}
 
 	var newID int64
@@ -620,13 +750,18 @@ func apiUpdate(body []byte, isAdmin bool) {
 	}
 
 	iconPath := cur
-	if p.IconBase64 != "" {
-		raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(p.IconBase64, "data:image/png;base64,"))
-		if err == nil {
-			if name, e := saveIconSizes(esc(p.ServiceName), raw); e == nil {
-				iconPath = "ui/images/" + name
-			}
+	if strings.TrimSpace(p.IconBase64) != "" {
+		raw, err := base64.StdEncoding.DecodeString(stripDataURI(p.IconBase64))
+		if err != nil {
+			outErr(400, "图标 base64 解析失败")
+			return
 		}
+		name, e := saveIconSizes(esc(p.ServiceName), raw)
+		if e != nil {
+			outErr(400, "图标保存失败: "+e.Error())
+			return
+		}
+		iconPath = "ui/images/" + name
 	}
 
 	_, err = db.Exec(`UPDATE app_service SET title=$1, icon=$2, "type"=$3, url=$4,
@@ -803,27 +938,56 @@ func apiUpload(body []byte, isAdmin bool) {
 	var req struct {
 		FileName string `json:"file_name"`
 		Base64   string `json:"base64"`
+		ImageURL string `json:"image_url"` // 新增：从 URL 获取图标
 	}
-	if err := json.Unmarshal(body, &req); err != nil || req.Base64 == "" {
+	if err := json.Unmarshal(body, &req); err != nil {
+		outErr(400, "参数解析失败")
+		return
+	}
+
+	var raw []byte
+	var name string
+
+	switch {
+	case strings.TrimSpace(req.ImageURL) != "":
+		// 从 URL 拉取
+		data, err := fetchImageFromURL(req.ImageURL)
+		if err != nil {
+			outErr(400, err.Error())
+			return
+		}
+		raw = data
+		// 文件名优先取 URL 最后一段
+		if u, e := url.Parse(strings.TrimSpace(req.ImageURL)); e == nil {
+			base := filepath.Base(u.Path)
+			name = esc(strings.TrimSuffix(base, filepath.Ext(base)))
+		}
+	case strings.TrimSpace(req.Base64) != "":
+		data, err := base64.StdEncoding.DecodeString(stripDataURI(req.Base64))
+		if err != nil {
+			outErr(400, "base64 解析失败")
+			return
+		}
+		raw = data
+		name = esc(strings.TrimSuffix(req.FileName, filepath.Ext(req.FileName)))
+	default:
 		outErr(400, "缺少图片数据")
 		return
 	}
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(req.Base64, "data:image/png;base64,"))
-	if err != nil {
-		outErr(400, "base64 解析失败")
+
+	if len(raw) > maxIconBytes {
+		outErr(400, fmt.Sprintf("图片不能超过 %d MB", maxIconBytes>>20))
 		return
 	}
-	if len(raw) > 2<<20 {
-		outErr(400, "图片不能超过 2MB")
-		return
-	}
-	name := esc(strings.TrimSuffix(req.FileName, filepath.Ext(req.FileName)))
-	if name == "" {
+	if name == "" || name == "." {
 		name = fmt.Sprintf("upload_%d", time.Now().Unix())
+	}
+	if len(name) > 40 {
+		name = name[:40]
 	}
 	fn, err := saveIconSizes(name, raw)
 	if err != nil {
-		outErr(500, err.Error())
+		outErr(400, err.Error())
 		return
 	}
 	outJSON(200, map[string]any{"ok": true, "icon_name": fn})

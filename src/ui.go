@@ -182,6 +182,10 @@ html.dark .tag--success{background:#1c2518;border-color:#274723}
 .upload-area img{width:88px;height:88px;border-radius:8px;object-fit:cover;
                  display:block;margin:0 auto 8px;border:1px solid var(--border-l2)}
 
+.url-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+.url-row .el-input__inner{flex:1;min-width:0}
+.url-row .el-btn{white-space:nowrap;flex-shrink:0}
+
 select.el-input__inner{cursor:pointer}
 
 /* 弹窗（确认框） */
@@ -328,12 +332,16 @@ html.dark #toast.err{background:#2b1d1d;border-color:#472626}
     </div>
 
     <div class="el-form-item">
-      <label>图标上传</label>
+      <label>图标</label>
       <div class="field">
         <div class="image-upload-container">
-          <div class="upload-area" id="upBox">选择图片</div>
+          <div class="upload-area" id="upBox">选择本地图片</div>
         </div>
-        <div class="hint">建议 256×256 PNG/JPG，不超过 1024 KB；留空使用默认图标</div>
+        <div class="url-row">
+          <input class="el-input__inner" id="fIconUrl" placeholder="或粘贴图片 URL，点右侧获取">
+          <button class="el-btn" id="btnFetchIcon" type="button">从 URL 获取</button>
+        </div>
+        <div class="hint">支持 PNG / JPEG / GIF / WebP / BMP / TIFF，建议 256×256，不超过 8 MB；留空使用默认图标</div>
       </div>
     </div>
 
@@ -657,24 +665,58 @@ async function openEdit(name){
   }catch(e){ toast('加载失败：' + e.message, 'err'); }
 }
 
+/* 统一：把选好的图片显示到预览框
+   dataUrl 可以是 data: URI（本地文件），也可以是服务端图片地址（URL 获取） */
+function showIconPreview(dataUrl, savedName){
+  UPLOADED = savedName ? ('saved:' + savedName) : dataUrl;
+  const box = $('#upBox');
+  box.className = 'upload-area has';
+  box.innerHTML = '<img src="' + dataUrl + '" alt="">点击更换图片';
+}
+}
+
+/* 本地选择（支持多格式） */
 $('#upBox').addEventListener('click', () => {
   const inp = document.createElement('input');
   inp.type = 'file';
-  inp.accept = 'image/png,image/jpeg';
+  inp.accept = 'image/*';
   inp.onchange = () => {
     const f = inp.files[0];
     if(!f) return;
-    if(f.size > 1024*1024){ toast('图片不能超过 1024 KB', 'err'); return; }
+    if(f.size > 8*1024*1024){ toast('图片不能超过 8 MB', 'err'); return; }
     const rd = new FileReader();
-    rd.onload = () => {
-      UPLOADED = rd.result;
-      const box = $('#upBox');
-      box.className = 'upload-area has';
-      box.innerHTML = '<img src="' + rd.result + '" alt="">点击更换图片';
-    };
+    rd.onload = () => showIconPreview(rd.result);
     rd.readAsDataURL(f);
   };
   inp.click();
+});
+
+/* 从 URL 获取图标 */
+async function fetchIconFromUrl(){
+  const url = ($('#fIconUrl').value || '').trim();
+  if(!url){ toast('请先填写图片 URL', 'err'); return; }
+  if(!/^https?:\/\//i.test(url)){ toast('URL 需以 http:// 或 https:// 开头', 'err'); return; }
+  const btn = $('#btnFetchIcon');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '获取中…';
+  try{
+    const r = await post('/api/upload', { image_url: url });
+    if(r && r.icon_name){
+      // 用后端已落盘的图做预览，避免浏览器跨域拦截
+      showIconPreview('/api/icon?f=' + encodeURIComponent('ui/images/' + r.icon_name) + '&t=' + Date.now(), r.icon_name);
+      toast('图标已获取', 'ok');
+    }else{
+      toast((r && r.error) || '获取失败', 'err');
+    }
+  }catch(e){
+    toast('获取失败：' + e.message, 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+$('#btnFetchIcon').addEventListener('click', fetchIconFromUrl);
+$('#fIconUrl').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){ e.preventDefault(); fetchIconFromUrl(); }
 });
 
 /* 组装地址 */
@@ -706,8 +748,10 @@ $('#btnSave').addEventListener('click', async () => {
     url: url,
     is_admin: document.querySelector('input[name=fAdmin]:checked').value === 't'
   };
-  if(UPLOADED) payload.icon_base64 = UPLOADED;
-
+  // 只有本地选的图片（data URI）才作为 base64 提交；
+  // 从 URL 获取的图已在服务端落盘，此处只传 icon_name。
+  if(UPLOADED && UPLOADED.startsWith('data:')) payload.icon_base64 = UPLOADED;
+  else if(UPLOADED && UPLOADED.startsWith('saved:')) payload.icon_name = UPLOADED.slice(6);
   if(!payload.title){ toast('请填写图标显示名称', 'err'); return; }
   if(!url){ toast('请填写访问路径', 'err'); return; }
   if(!EDITING && !payload.service_name){ toast('请填写服务名称', 'err'); return; }
