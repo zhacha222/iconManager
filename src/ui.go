@@ -673,7 +673,6 @@ function showIconPreview(dataUrl, savedName){
   box.className = 'upload-area has';
   box.innerHTML = '<img src="' + dataUrl + '" alt="">点击更换图片';
 }
-}
 
 /* 本地选择（支持多格式） */
 $('#upBox').addEventListener('click', () => {
