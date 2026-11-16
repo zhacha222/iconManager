@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/fyne-io/image/ico"
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
@@ -375,7 +376,7 @@ func resizeTo(src image.Image, w, h int) *image.RGBA {
 const maxIconBytes = 8 << 20
 
 // supportedFormats 供前端与错误提示使用
-const supportedFormats = "PNG / JPEG / GIF / WebP / BMP / TIFF"
+const supportedFormats = "PNG / JPEG / GIF / WebP / BMP / TIFF / ICO"
 
 // decodeAny 解析任意已注册格式，返回图像与识别到的格式名。
 // 若首帧解码失败且是 GIF，会尝试取第一帧（GIF 的 image.Decode 本就返回首帧）。

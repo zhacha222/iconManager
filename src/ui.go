@@ -341,7 +341,7 @@ html.dark #toast.err{background:#2b1d1d;border-color:#472626}
           <input class="el-input__inner" id="fIconUrl" placeholder="或粘贴图片 URL，点右侧获取">
           <button class="el-btn" id="btnFetchIcon" type="button">从 URL 获取</button>
         </div>
-        <div class="hint">支持 PNG / JPEG / GIF / WebP / BMP / TIFF，建议 256×256，不超过 8 MB；留空使用默认图标</div>
+        <div class="hint">支持 PNG / JPEG / GIF / WebP / BMP / TIFF / ICO，建议 256×256，不超过 8 MB；留空使用默认图标</div>
       </div>
     </div>
 
